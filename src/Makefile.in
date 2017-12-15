@@ -130,14 +130,14 @@ sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 bin_PROGRAMS = scomm
-scomm_SOURCES = main.cpp protocol.cpp moduls.cpp Client.cpp
+scomm_SOURCES = main.cpp protocol.cpp moduls.cpp Client.cpp Parser.cpp
 
 # set the include path found by configure
 INCLUDES = $(all_includes)
 
 # the library search path.
 scomm_LDFLAGS = $(all_libraries) 
-noinst_HEADERS = main.h protocol.h moduls.h Client.h
+noinst_HEADERS = main.h protocol.h moduls.h Client.h Parser.h
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -147,7 +147,7 @@ bin_PROGRAMS = scomm$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 
 am_scomm_OBJECTS = main.$(OBJEXT) protocol.$(OBJEXT) moduls.$(OBJEXT) \
-	Client.$(OBJEXT)
+	Client.$(OBJEXT) Parser.$(OBJEXT)
 scomm_OBJECTS = $(am_scomm_OBJECTS)
 scomm_LDADD = $(LDADD)
 scomm_DEPENDENCIES =
@@ -155,8 +155,9 @@ scomm_DEPENDENCIES =
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
-@AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/Client.Po ./$(DEPDIR)/main.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/moduls.Po ./$(DEPDIR)/protocol.Po
+@AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/Client.Po ./$(DEPDIR)/Parser.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/main.Po ./$(DEPDIR)/moduls.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/protocol.Po
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 LTCXXCOMPILE = $(LIBTOOL) --mode=compile $(CXX) $(DEFS) \
@@ -220,6 +221,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Client.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Parser.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/moduls.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/protocol.Po@am__quote@

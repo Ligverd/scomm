@@ -17,9 +17,8 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-
-// define for SCOMM
-#define SCOMVERSION 10
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
 #define XA ('X' * 256 + 'A')
 #define YA ('Y' * 256 + 'A')
@@ -32,12 +31,11 @@
 
 #define LENSTRBUF 5000
 #define MAX_FRAME 1000
-#define MAXSIZEONEMESS 220
+#define MAXSIZEONEMESS 290
 
 extern pthread_mutex_t resourse;
 extern bool fFisWaitAccept;
-extern bool fMustReinitPort;
-extern bool link_state;
+extern volatile bool link_state;
 extern bool fOk;
 
 extern short txHead, txTail, txSend;
@@ -82,3 +80,4 @@ void set_timer_c(int timer);
 void Timer_A(void);
 void Timer_B(void);
 void Timer_C(void);
+#endif

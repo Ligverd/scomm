@@ -17,27 +17,25 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-
-#ifndef CLIENT_H
-#define CLIENT_H
-
-class CClient 
+#ifndef PARSER_H
+#define PARSER_H
+class CParser
 {
-	void ReceivePacket(unsigned char *buff, short size);//zapis v txbuf
+	int CheckDec(const char *str);
+	int CheckIp(const char * ipstr);
+	void PrintHelp(void);
 public:
-	bool state;
-	bool fBinaryRead;
-	bool fBinaryWrite;
-	unsigned char recvBuf[10000];
-	int con;
-	int fd;
-	int recvLen;
-	char IP[16];
-
-	void SendPacket(unsigned char *buff, short size);//otpravka paketa klientu
-	void OnReceive( unsigned char *buff, short size );//prijem i obrabotka paketa ot klienta
-	CClient(int file_description, int con, const char *ip);
-	~CClient();
+	int ParseCStringParams (int argc, char *argv[]);
+	char* sAtsIp;
+	char* sCommDev;
+	char* sOutDir;
+	in_addr_t AtsPort;
+	in_addr_t ServerPort;
+	bool fDaemon;
+	bool fComm;
+	unsigned char ProtV;
+	CParser();
+	~CParser();
 };
 #endif
 

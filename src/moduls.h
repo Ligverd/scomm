@@ -17,9 +17,8 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
-extern pthread_mutex_t file;
-
-size_t ReadNonBlock(int fd, char* buff, size_t len,unsigned int del);
+#ifndef _MODULS_H
+#define _MODULS_H
 bool make_nonblock(int sock);
 int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port);
 int initTTY(char* comm);
@@ -32,9 +31,10 @@ int Open_log_file(char *file_name);
 void get_time_str(char* tm_str);
 bool StrToLog(const char* str);
 void Loger(const char* str);
-void Loger(const char* str1,const char* str2,int d);
 void get_parameters(void);
 int check_d(const char* str);
 int max(int x, int y);
 void Print_help(void);
 void Print_error(void);
+#endif
+
