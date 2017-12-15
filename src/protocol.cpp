@@ -22,29 +22,45 @@
 #include "main.h"
 
 pthread_mutex_t resourse = PTHREAD_MUTEX_INITIALIZER;
-unsigned char buffer[LENSTRBUF * 10 + 100];
-unsigned char txBuf[LENSTRBUF];
-unsigned char frameBuf[MAX_FRAME * 2 + 10];
-short txHead, txTail, txSend;
-short LastCode;
-short cTry;
-unsigned short curInfo;
 
-int frameLen;
-int read_bad_frames;
+CPPP::CPPP()
+{
+    frameLen = 0;
 
-int tmA;
-int tmB;
-int tmC;
+    txHead = 0;
+    txTail = 0;
+    txSend = 0;
+    LastCode = -1;
+    LastSize = 0;
+    fOk = false;
 
-unsigned short nFisCode;
+    tmA = 200;
+    tmB = 300;
+    tmC = 500;
 
-bool fOk;
-bool fFisWaitAccept;
-volatile bool link_state;
-bool setcom9600 = false;
+    TimerA = -1;
+    TimerB = 300;               //Srazu zavodim 2 taimera
+    TimerC = 500;
 
-unsigned short read_word(short &pos)
+    cTry = 0;
+    nWaitFE = 0;
+
+    curInfo = (unsigned short) -1;
+    fFisWaitAccept = false;
+
+    m_dwReadBytes = 0;
+    m_dwWriteBytes = 0;
+    m_dwReadGoodFrames = 0;
+    m_dwReadBadFrames = 0;
+    m_dwDevReinits = 0;
+    m_dwCounterLinkDown = 0;
+}
+
+CPPP::~CPPP(void)
+{
+}
+
+unsigned short CPPP::read_word(short &pos)
 {
     unsigned short ret;
 
@@ -57,7 +73,7 @@ unsigned short read_word(short &pos)
     return ret;
 }
 
-void write_word(short &pos, unsigned short w)
+void CPPP::write_word(short &pos, unsigned short w)
 {
     txBuf[pos++] = (unsigned char) w;
     if (pos >= LENSTRBUF)
@@ -67,14 +83,14 @@ void write_word(short &pos, unsigned short w)
         pos -= LENSTRBUF;
 }
 
-void add(short &pos, short del)
+void CPPP::add(short &pos, short del)
 {
     pos += del;
     if (pos >= LENSTRBUF)
         pos -= LENSTRBUF;
 }
 
-void copyto(unsigned char *data, unsigned short len)
+void CPPP::copyto(unsigned char *data, unsigned short len)
 {
     if (txHead + len <= LENSTRBUF)
     {
@@ -91,7 +107,7 @@ void copyto(unsigned char *data, unsigned short len)
     }
 }
 
-void copy_from(unsigned char *data, unsigned short len)
+void CPPP::copy_from(unsigned char *data, unsigned short len)
 {
     if (txTail + len <= LENSTRBUF)
     {
@@ -106,11 +122,12 @@ void copy_from(unsigned char *data, unsigned short len)
     }
 }
 
-void Write_bytes_to_ATS(unsigned char *data, short size)
+void CPPP::SendBytesToATS(unsigned char *data, short size)
 {
     struct timeval tv;
     fd_set wset;
     int retval;
+    int count = 0;
 
     do
     {
@@ -125,10 +142,13 @@ void Write_bytes_to_ATS(unsigned char *data, short size)
                 int n = write(ATS_fd, data, size);
 
                 if (n > 0)
+                {
                     printf("PC -> ATS bytes:%d\n", n);
+                    m_dwWriteBytes += n;
+                }
                 else
                 {
-                    Loger("COMM port error!\n");
+                    TRACE("COMM port error!\n");
                     Loger("Reconnecting...\n");
                     Reinit_ATS_Connection();
                 }
@@ -144,10 +164,11 @@ void Write_bytes_to_ATS(unsigned char *data, short size)
                     int n = write(ATS_fd, data, size);
 
                     printf("PC -> ATS bytes:%d\n", n);
+                    m_dwWriteBytes += n;
                 }
                 else
                 {
-                    Loger("ATS socket error!\n");
+                    TRACE("ATS socket error!\n");
                     Loger("Reconnecting...\n");
                     Reinit_ATS_Connection();
                 }
@@ -155,15 +176,16 @@ void Write_bytes_to_ATS(unsigned char *data, short size)
         }
         else if (retval < 0 && errno != EINTR)
         {
-            Loger("ATS socket internal error!\n");
+            TRACE("ATS socket internal error!\n");
             Loger("Reconnecting...\n");
             Reinit_ATS_Connection();
             break;
         }
-    } while (retval <= 0);
+        count++;
+    } while (retval < 0 && count < 2);
 }
 
-void write_frame(unsigned char *data, short len)
+void CPPP::SendFrameToATS(unsigned char *data, short len)
 {
     unsigned char buf[MAX_FRAME * 2 + 10];
     unsigned int sum = 0;
@@ -200,11 +222,109 @@ void write_frame(unsigned char *data, short len)
     buf[out++] = (unsigned char) (sum >> 8);
     buf[out++] = (unsigned char) (sum >> 16);
     buf[out++] = (unsigned char) (sum >> 24);
-    Write_bytes_to_ATS(buf, out);
+    SendBytesToATS(buf, out);
 
 }
 
-void down_read_frame(unsigned char *data, short len)
+void CPPP::ReadBytesFtomATS(unsigned char chr) //Kombinirujem baiti v freim, videliajem paket
+{
+    if (frameLen >= MAX_FRAME * 2 + 10)
+        frameLen = 0;           //esli previsili MAX_FRAME * 2 + 10 copim snachala 
+
+    frameBuf[frameLen++] = chr; //ne kopitsia esli ne vstretili priznak nachala mod.paketa
+
+    if (frameLen == 1 && !(frameBuf[0] == 0xAA))
+        frameLen = 0;           // esli ne vstretili priznak vozmozhnogo nachala mod.paketa
+
+    if (frameLen == 2 && !(frameBuf[0] == 0xAA && frameBuf[1] == 0x11))
+        frameLen = 0;           // esli ne vstretili priznak nachala mod.paketa
+
+    if (frameLen >= 8 && (frameBuf[frameLen - 6] == 0xAA && frameBuf[frameLen - 5] == 0x22))    //esli smogli nakopit paket
+    {
+        int in, out;
+
+        for (in = 0, out = 0; in < frameLen;)
+        {
+            if (frameBuf[in] == 0xAA)
+            {
+                in++;           //Analizirujem sledujushij za 0xAA bait
+                switch (frameBuf[in++])
+                {
+                  case 0x11:   //Nachalo mod.paketa
+                      out = 0;
+                      break;
+                  case 0x22:   //Konec mod.paketa - proveriajem Controlnuju Summu
+                  {
+                      unsigned int sum1 =
+                          (unsigned int) *(frameBuf + in) +
+                          ((unsigned int) *(frameBuf + in + 1) << 8) +
+                          ((unsigned int) *(frameBuf + in + 2) << 16) +
+                          ((unsigned int) *(frameBuf + in + 3) << 24);
+                      in += 4;
+                      unsigned int sum2 = 0;
+                      unsigned char t1 = 0, t2 = 0;
+                      unsigned short t3 = 0;
+
+                      for (int p = 0; p < out; p++)
+                      {
+                          t1 ^= frameBuf[p];
+                          t2 += 1 + frameBuf[p];
+                          t3 +=
+                              (frameBuf[p] + 1) * (frameBuf[p] + 2) * (p + 3);
+                      }
+                      sum2 =
+                          ((unsigned int) t1) + (((unsigned int) t2) << 8) +
+                          (((unsigned int) t3) << 16);
+                      sum2 += parser.ProtV;
+                      if (in != frameLen)       //ignoriruem paket esli v freime kontrolnaja summa ne na meste
+                      {
+                          TRACE("PC <- ATS BAD LEN\n");
+                          frameLen = 0;
+                          m_dwReadBadFrames++;
+                          return;
+                      }
+                      if (sum1 != sum2)
+                      {
+                          TRACE("PC <- ATS BAD CRC\n");
+                          frameLen = 0;
+                          m_dwReadBadFrames++;
+                          return;
+                      }
+                      else
+                      {
+                          printf("PC <- ATS bytes:%d\n", frameLen);
+                          m_dwReadGoodFrames++;
+                      }
+                  }
+                      break;
+                  case 0x33:   //Esli v mod.pakete vstretilos 0xAA
+                      frameBuf[out++] = 0xAA;
+                      break;
+                  case 0x44:   // AA
+                      TRACE("PC <- ATS AA44\n");
+                      // ignoring xAA x44
+                      break;
+
+                  default:
+                      TRACE("PC <- ATS BAD FRAME\n");
+                      frameLen = 0;
+                      m_dwReadBadFrames++;
+                      return;
+                }
+            }
+            else
+                frameBuf[out++] = frameBuf[in++];
+        }
+        frameLen = 0;
+        ProcessPacketFromATS(frameBuf, out);
+    }
+
+}
+
+
+
+/*
+void CPPP::ProcessPacketFromATS(unsigned char *data, short len)
 {
     unsigned short Type =
         (unsigned short) *data + ((unsigned short) *(data + 1) << 8);
@@ -300,119 +420,177 @@ void down_read_frame(unsigned char *data, short len)
     }
 
 }
+*/
 
-
-void Read_ATS_Packet(unsigned char chr)
+void CPPP::ProcessPacketFromATS(unsigned char *data, short len)
 {
-    if (frameLen >= MAX_FRAME * 2 + 10)
-        frameLen = 0;           //esli previsili MAX_FRAME * 2 + 10 copim snachala 
 
-    frameBuf[frameLen++] = chr; //ne kopitsia esli ne vstretili priznak nachala mod.paketa
+    unsigned short Type =
+        (unsigned short) *data + ((unsigned short) *(data + 1) << 8);
+    unsigned short Code =
+        (unsigned short) *(data + 2) + ((unsigned short) *(data + 3) << 8);
 
-    if (frameLen == 1 && !(frameBuf[0] == 0xAA))
-        frameLen = 0;           // esli ne vstretili priznak vozmozhnogo nachala mod.paketa
-
-    if (frameLen == 2 && !(frameBuf[0] == 0xAA && frameBuf[1] == 0x11))
-        frameLen = 0;           // esli ne vstretili priznak nachala mod.paketa
-
-    if (frameLen >= 8 && (frameBuf[frameLen - 6] == 0xAA && frameBuf[frameLen - 5] == 0x22))    //esli smogli nakopit paket
+    switch (Type)
     {
-        int in, out;
+      case FA:
+      {
+          if (Code == nFisCode) // все ОК, фисушка потвердилась
+              fFisWaitAccept = false;
+      }
+          break;
+      case XA:
+      {
+          short WaitCode = LastCode + LastSize;
 
-        for (in = 0, out = 0; in < frameLen;)
-        {
-            if (frameBuf[in] == 0xAA)
-            {
-                in++;           //Analizirujem sledujushij za 0xAA bait
-                switch (frameBuf[in++])
-                {
-                  case 0x11:   //Nachalo mod.paketa
-                      out = 0;
-                      break;
-                  case 0x22:   //Konec mod.paketa - proveriajem Controlnuju Summu
+          if (WaitCode >= LENSTRBUF)
+              WaitCode -= LENSTRBUF;
+
+          short del = WaitCode - Code;
+
+          if (del < 0)
+              del += LENSTRBUF;
+
+          if (!LastSize || del < (LENSTRBUF / 2 - LENSTRBUF / 50))
+          {
+              buffer[0] = (unsigned char) YW;
+              buffer[1] = (unsigned char) (YW >> 8);
+              buffer[2] = (unsigned char) Code;
+              buffer[3] = (unsigned char) (Code >> 8);
+              SendFrameToATS(buffer, 4);
+          }
+          else
+              break;
+
+          if (!LastSize)
+              WaitCode = Code;
+
+          int pos = 4;
+          short CurCode = Code;
+          bool fCatch = false;
+
+          while (pos < len)
+          {
+              unsigned short s =
+                  (unsigned short) *(data + pos) +
+                  ((unsigned short) *(data + pos + 1) << 8) - 2;
+              pos += 2;
+              if (s <= MAXSIZEONEMESS + 1)
+              {
+                  // proverim novij li eto packet
+                  if (fCatch || CurCode == WaitCode)
                   {
-                      unsigned int sum1 =
-                          (unsigned int) *(frameBuf + in) +
-                          ((unsigned int) *(frameBuf + in + 1) << 8) +
-                          ((unsigned int) *(frameBuf + in + 2) << 16) +
-                          ((unsigned int) *(frameBuf + in + 3) << 24);
-                      in += 4;
-                      unsigned int sum2 = 0;
-                      unsigned char t1 = 0, t2 = 0;
-                      unsigned short t3 = 0;
-
-                      for (int p = 0; p < out; p++)
-                      {
-                          t1 ^= frameBuf[p];
-                          t2 += 1 + frameBuf[p];
-                          t3 += (frameBuf[p] + 1) * (frameBuf[p] + 2) * (p + 3);
-                      }
-                      sum2 =
-                          ((unsigned int) t1) + (((unsigned int) t2) << 8) +
-                          (((unsigned int) t3) << 16);
-                      sum2 += parser.ProtV;
-                      if (in != frameLen)       //ignoriruem paket esli v freime kontrolnaja summa ne na meste
-                      {
-                          frameLen = 0;
-                          return;
-                      }
-                      if (sum1 != sum2)
-                      {
-                          frameLen = 0;
-                          read_bad_frames++;
-                          return;
-                      }
-                      else
-                          printf("PC <- ATS bytes:%d\n", frameLen);
+                      fCatch = true;
+                      ProcessMessFromATS(data + pos, s);
                   }
-                      break;
-                  case 0x33:   //Esli v mod.pakete vstretilos 0xAA
-                      frameBuf[out++] = 0xAA;
-                      break;
-                  default:
-                      frameLen = 0;
-                      return;
-                }
-            }
-            else
-                frameBuf[out++] = frameBuf[in++];
-        }
-        frameLen = 0;
-        down_read_frame(frameBuf, out);
-    }
+              }
+              else
+              {
+                  TRACE("Message lengh is greater than availible!\n");
+                  return;
+              }
+              pos += s;
 
+              CurCode += (s + 2);
+              if (CurCode >= LENSTRBUF)
+                  CurCode -= LENSTRBUF;
+          }
+          if (pos != len)
+              TRACE("Error of message lengh declaration!\n");
+
+          if (fCatch)
+          {
+              LastCode = Code;
+              if (fOk)
+                  LastSize = len - 4;
+              else
+                  LastSize = 0;
+          }
+          else if (fOk)
+          {
+              int del = CurCode - WaitCode;
+
+              if (del > (LENSTRBUF / 2 - LENSTRBUF / 50))
+                  del -= LENSTRBUF;
+              if (del > 0)
+                  TRACE("OSTATOK ERROR\n");
+          }
+      }
+          break;
+      case YA:                 //ACK of message
+      {
+          pthread_mutex_lock(&resourse);
+          if (Code == txTail)   //Esli prishlo podtverzhdenije na poslednij otpravlennij paket
+          {                     //mi ne shliom paketov s uprezhdenijem
+              txTail = txSend;  //smeschajemsia v kolce txBuf
+              if (txTail != txHead)
+              {
+                  *buffer = (unsigned char) XW;
+                  *(buffer + 1) = (unsigned char) (XW >> 8);
+                  *(buffer + 2) = (unsigned char) txTail;
+                  *(buffer + 3) = (unsigned char) (txTail >> 8);
+
+                  len = txHead - txTail;        //opredelim dopustimuju dlinnu paketa
+                  add(len, LENSTRBUF);  //Uchtiom zakolcovannoct txBuf dlia dlinni otpravliaemogo freima
+                  if (len > MAX_FRAME - 6)
+                      len = MAX_FRAME - 6;
+                  short pos = txSend, s = 0, ss;
+
+                  while (s <= len)      //nabiraem messagi v freim chtob v niom nebilo fragmentov messag
+                  {
+                      txSend = pos;     //smeshaem ukuzatel otpravlennogo
+                      if (txSend == txHead)
+                          break;        // esli novoe uvelichenije tochno dast bolshe
+                      s += (ss = read_word(pos));       //kopim dlinnu
+                      add(pos, ss - 2); //smeshiajem ukazatel na dlinnu mesagi
+                  }
+                  len = txSend - txTail;
+                  add(len, LENSTRBUF);  //istinnaja dlinna
+                  if (!len)
+                  {
+                      TRACE("Buffer error!\n");
+                  }
+                  copy_from(buffer + 4, len);   //copiruem iz txBuf nakoplennoe
+                  SendFrameToATS(buffer, len + 4);
+                  set_timer_a(tmA + len / 10);
+                  cTry = 0;
+              }
+              else
+                  set_timer_a(0);       //Nechego otsilat. Vikliuchajem taimer
+          }
+          pthread_mutex_unlock(&resourse);
+      }
+          break;
+    }
 }
 
-void LinkUp(void)
+void CPPP::LinkUp(void)
 {
     Loger("LinkUp!\n");
     link_state = true;
 }
 
-void LinkDown(void)
+void CPPP::LinkDown(void)
 {
     Loger("LinkDown!\n");
     link_state = false;         //dlia otboja klientov ozhidajushih soedinenija
-    if (setcom9600)
-    {
-        setcom9600 = false;
-        Reinit_ATS_Connection();
-    }
+    m_dwCounterLinkDown++;
+    sleep(1);
+    Reinit_ATS_Connection();
 }
 
-void OnOpenChannel(unsigned char ch)
+void CPPP::OnOpenChannel(unsigned char ch)
 {
 }
 
-void OnCloseChannel(unsigned char ch)
+void CPPP::OnCloseChannel(unsigned char ch)
 {
 }
 
-void RecvData(unsigned char *data, short len)
+void CPPP::ProcessMessFromATS(unsigned char *data, short len)
 {
     if (len < 1)
     {
-        Loger("Message lengh error!\n");
+        TRACE("Message lengh error!\n");
         return;
     }
     unsigned char to = *data;   // beriom pervij simvol mesagi
@@ -424,18 +602,20 @@ void RecvData(unsigned char *data, short len)
         if (fOk)                //Esli do etogo kanal bil rabochij to teper kanal so stanciej ne rabochij
         {
             fOk = false;
+            LastSize = 0;
             curInfo = (unsigned short) -1;
             LinkDown();         //otbivaem klientskije soedinenija
+            LastSize = 0;
         }
     }
     else if (to == 0xFF && len == 2)    //esli FF
     {
         if (!fOk)               //Esli kanal ne rabochij 
         {
-            WritePacket(0xFB, NULL, 0); //shliom FB
+            PutMessToBuff(0xFB, NULL, 0); //shliom FB
         }
         //a zatem FE c s poluchennim <n><n>
-        WritePacket(0xFE, data, sizeof(unsigned short));
+        PutMessToBuff(0xFE, data, sizeof(unsigned short));
         curInfo =
             (unsigned short) (*data) + ((unsigned short) *(data + 1) << 8);
     }
@@ -444,6 +624,7 @@ void RecvData(unsigned char *data, short len)
         unsigned short info = (unsigned short) *data + ((unsigned short) *(data + 1) << 8);     //schitivaem parametr <k><k>
         unsigned char id;
 
+        nWaitFE = 0;
         id = 0;
         if (info == ((id) + (id << 8))) // esli sovpalo s PC
         {
@@ -452,13 +633,16 @@ void RecvData(unsigned char *data, short len)
             {
                 fOk = true;
                 LinkUp();
+                LastSize = 0;
             }
         }
         else if (fOk)
         {
             fOk = false;
+            LastSize = 0;
             curInfo = (unsigned short) -1;
             LinkDown();
+            LastSize = 0;
         }
     }
     else if (!fOk)
@@ -484,64 +668,67 @@ void RecvData(unsigned char *data, short len)
             struct termios tty;
 
             if (tcgetattr(ATS_fd, &tty) < 0)
-                Loger("Can't get COMM info to set 9600!\n");
+                TRACE("Can't get COMM info to set 9600!\n");
             else
             {
                 cfsetospeed(&tty, B9600);
                 cfsetispeed(&tty, B9600);
                 cfmakeraw(&tty);
                 if (tcsetattr(ATS_fd, TCSANOW, &tty) < 0)
-                    Loger("Can't set COMM 9600!\n");
+                    TRACE("Can't set COMM 9600!\n");
                 else
                 {
-                    setcom9600 = true;
                     Loger("COMM set to 9600!\n");
                 }
             }
         }
         else
-            Loger("Can't set COMM 9600 - scomm conected via ethernet!\n");
+            TRACE("Can't set COMM 9600 - conected via ethernet!\n");
     }
     else if (to < MAX_CLIENT)   //otdajem klientu
     {
-        ReadPacket(to, data, len);
+        SendMessToClient(to, data, len);
     }
     else
     {
-        Loger("Data error!\n");
+        TRACE("Data error!\n");
     }
 }
 
-void WritePacket(unsigned char ch, unsigned char *data, short len)
+void CPPP::PutMessToBuff(unsigned char ch, unsigned char *data, short len)
 {
     unsigned char buf[MAXSIZEONEMESS];
 
     if (len + 1 > MAXSIZEONEMESS)
     {
-        Loger("WARNING paket is to big!\n");
+        TRACE("WARNING paket is to big!\n");
         return;
     }
     *buf = ch;
     memcpy(buf + 1, data, len);
-    SendData(buf, len + 1);
+    PutDataToBuff(buf, len + 1);
 }
 
-void ReadPacket(unsigned char ch, unsigned char *data, short len)
+void CPPP::SendMessToClient(unsigned char ch, unsigned char *data, short len)
 {
-
-    if ((Client[ch] != NULL) && ch < MAX_CLIENT)
-        Client[ch]->SendPacket(data, len);
+    if(ch < MAX_CLIENT)
+    {
+        //pthread_mutex_lock(&client_mutex[ch]);
+        if (Client[ch])
+            Client[ch]->SendPacket(data, len);
+        //pthread_mutex_unlock(&client_mutex[ch]);
+    }
 }
 
 
-void SendData(unsigned char *data, short len)
+void CPPP::PutDataToBuff(unsigned char *data, short len)
 {
     short used;
 
     len += 2;
     if (((unsigned short) len) > MAXSIZEONEMESS)
     {
-        printf("Warning message lengh error!\n");
+        TRACE("Warning message lengh error!\n");
         return;
     }
     pthread_mutex_lock(&resourse);
@@ -549,10 +736,10 @@ void SendData(unsigned char *data, short len)
     add(used, LENSTRBUF);
     if (used + len >= LENSTRBUF)        //perekritije dannih
     {
-        printf("Warning buffer owerflow!\n");
+        TRACE("Warning buffer owerflow!\n");
         txHead = txTail = txSend = 0;
-        return;
         pthread_mutex_unlock(&resourse);
+        return;
     }
     write_word(txHead, len);    //zapisali dlinnu v kolco
     len -= 2;
@@ -582,52 +769,52 @@ void SendData(unsigned char *data, short len)
         add(len, LENSTRBUF);
         if (!len)
         {
-            Loger("Buffer error!\n");
+            TRACE("Buffer error!\n");
         }
         copy_from(buffer + 4, len);
 
-        write_frame(buffer, len + 4);
+        SendFrameToATS(buffer, len + 4);
         set_timer_a(tmA + len / 10);
         cTry = 0;
     }
     pthread_mutex_unlock(&resourse);
 }
 
-void OpenChannel(unsigned char ch)
+void CPPP::OpenChannel(unsigned char ch)
 {
     unsigned char buf[10];
 
     *buf = 0xFD;
     *(buf + 1) = ch;
-    SendData(buf, 2);
+    PutDataToBuff(buf, 2);
 }
 
-void CloseChannel(unsigned char ch)
+void CPPP::CloseChannel(unsigned char ch)
 {
     unsigned char buf[10];
 
     *buf = 0xFC;
     *(buf + 1) = ch;
-    SendData(buf, 2);
+    PutDataToBuff(buf, 2);
 }
 
-void set_timer_a(int timer)
+void CPPP::set_timer_a(int timer)
 {
     TimerA = timer;
 }
 
 
-void set_timer_b(int timer)
+void CPPP::set_timer_b(int timer)
 {
     TimerB = timer;
 }
 
-void set_timer_c(int timer)
+void CPPP::set_timer_c(int timer)
 {
     TimerC = timer;
 }
 
-void Timer_A(void)
+void CPPP::Timer_A(void)
 {
     short len;
 
@@ -641,11 +828,14 @@ void Timer_A(void)
             txTail = 0;
             txSend = 0;
             pthread_mutex_unlock(&resourse);
+            TRACE("ERROR TIMER A\n");
             if (fOk)
             {
                 fOk = false;
                 curInfo = (unsigned short) -1;
+                LastSize = 0;
                 LinkDown();
+                LastSize = 0;
             }
             return;
         }
@@ -658,7 +848,7 @@ void Timer_A(void)
 
         copy_from(buffer + 4, len);     //kopiruem iz txBuff starij paket
 
-        write_frame(buffer, len + 4);
+        SendFrameToATS(buffer, len + 4);
         set_timer_a(tmA + len / 10);
         cTry++;                 //uvelichivaem kol-vo otpravok
     }
@@ -666,9 +856,10 @@ void Timer_A(void)
 }
 
 
-void Timer_B(void)
+void CPPP::Timer_B(void)
 {
     unsigned char buf[4];
+    static int countB = 0;
 
     *buf = (unsigned char) FW;
     *(buf + 1) = (unsigned char) (FW >> 8);
@@ -677,21 +868,99 @@ void Timer_B(void)
     *(buf + 3) = (unsigned char) (nFisCode >> 8);
     if (fFisWaitAccept)
     {
-        write_frame(buf, 4);
-        fFisWaitAccept = false;
-        set_timer_b(tmB);
-        return;
+        if (++countB > 2)
+        {
+            countB = 0;
+            TRACE("ERROR TIMER B\n");
+            Reinit_ATS_Connection();
+            fFisWaitAccept = false;
+            set_timer_b(tmB);
+            return;
+        }
     }
-    //write_frame(buf,4);//visilaem neskolko raz
-    //write_frame(buf,4);//FW dlia bolshej uverennosti
-    write_frame(buf, 4);        //ibo esli etot paket nedojdiot sviazi pizdec
+    else
+        countB = 0;
+    SendFrameToATS(buf, 4);        //visilaem neskolko raz
+    SendFrameToATS(buf, 4);        //FW dlia bolshej uverennosti
+    SendFrameToATS(buf, 4);        //ibo esli etot paket nedojdiot sviazi pizdec
     fFisWaitAccept = true;
     set_timer_b(tmB);
 }
 
-void Timer_C(void)
+void CPPP::Timer_C(void)
 {
     unsigned char info[2] = { 0, 0 };
-    WritePacket(0xFF, info, sizeof(unsigned short));    //otpravka b ochered FF00
+    PutMessToBuff(0xFF, info, sizeof(unsigned short));    //otpravka b ochered FF00
     set_timer_c(tmC);
+    if (++nWaitFE >= 5)
+    {
+        nWaitFE = 0;
+        if (fOk)
+        {
+            TRACE("ERROR TIMER C\n");
+            fOk = false;
+            LastSize = 0;
+            curInfo = (unsigned short) -1;
+            LinkDown();
+            LastSize = 0;
+        }
+    }
+}
+
+void CPPP::ProcessTimers(void)
+{
+    if (TimerA > 0)
+    {
+        TimerA--;
+        if (TimerA == 0)
+            RunTimerA = true;
+    }
+    if (TimerB > 0)
+    {
+        TimerB--;
+        if (TimerB == 0)
+            RunTimerB = true;
+    }
+    if (TimerC > 0)
+    {
+        TimerC--;
+        if (TimerC == 0)
+            RunTimerC = true;
+    }
+}
+
+void CPPP::RunTimers(void)
+{
+    if (RunTimerA)
+    {
+        RunTimerA = false;
+        Timer_A();
+    }
+    if (RunTimerB)
+    {
+        RunTimerB = false;
+        Timer_B();
+    }
+    if (RunTimerC)
+    {
+        RunTimerC = false;
+        Timer_C();
+    }
+}
+
+void CPPP::PrintInfo(char *str)
+{
+    char *s = str;
+
+    s += sprintf(str,
+                 "ReadBytes:%d\r\nWriteBytes:%d\r\nReadGoodFrames:%d\r\nReadBadFrames:%d\r\nDevReinits:%d\r\nCounterLinkDown:%d\r\n",
+                 m_dwReadBytes, m_dwWriteBytes, m_dwReadGoodFrames,
+                 m_dwReadBadFrames, m_dwDevReinits, m_dwCounterLinkDown);
+    for (int i = 0; i < MAX_CLIENT; i++)
+    {
+        if (Client[i] && strlen(Client[i]->IP) && s)
+            s += sprintf(s, "Connected:%s\r\n", Client[i]->IP);
+    }
+    strcat(str, isOk()? "LinkUp\r\n" : "LinkDown\r\n");
+    strcat(str, "\r\n");
 }

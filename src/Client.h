@@ -1,3 +1,4 @@
+
 /***************************************************************************
  *   Copyright (C) 2007 by PAX   *
  *   pax@m-200.com   *
@@ -21,23 +22,25 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
-class CClient 
-{
-	void ReceivePacket(unsigned char *buff, short size);//zapis v txbuf
-public:
-	bool state;
-	bool fBinaryRead;
-	bool fBinaryWrite;
-	unsigned char recvBuf[10000];
-	int con;
-	int fd;
-	int recvLen;
-	char IP[16];
+#include "protocol.h"
 
-	void SendPacket(unsigned char *buff, short size);//otpravka paketa klientu
-	void OnReceive( unsigned char *buff, short size );//prijem i obrabotka paketa ot klienta
-	CClient(int file_description, int con, const char *ip);
-	~CClient();
+class CClient
+{
+    void ReceivePacket(unsigned char *buff, short size);        //zapis v txbuf
+  public:
+      bool state;
+    bool fBinaryRead;
+    bool fBinaryWrite;
+    unsigned char recvBuf[10000];
+    int con;
+    int fd;
+    int recvLen;
+    char IP[16];
+
+    CPPP *m_ppp;
+    void SendPacket(unsigned char *buff, short size);   //otpravka paketa klientu
+    void OnReceive(unsigned char *buff, short size);    //prijem i obrabotka paketa ot klienta
+      CClient(int file_description, int con, const char *ip, CPPP * _ppp);
+     ~CClient();
 };
 #endif
-

@@ -1,3 +1,4 @@
+
 /***************************************************************************
  *   Copyright (C) 2007 by PAX   *
  *   pax@m-200.com   *
@@ -21,21 +22,23 @@
 #define PARSER_H
 class CParser
 {
-	int CheckDec(const char *str);
-	int CheckIp(const char * ipstr);
-	void PrintHelp(void);
-public:
-	int ParseCStringParams (int argc, char *argv[]);
-	char* sAtsIp;
-	char* sCommDev;
-	char* sOutDir;
-	in_addr_t AtsPort;
-	in_addr_t ServerPort;
-	bool fDaemon;
-	bool fComm;
-	unsigned char ProtV;
-	CParser();
-	~CParser();
+    int CheckDec(const char *str);
+    int CheckIp(const char *ipstr);
+    void PrintHelp(void);
+  public:
+    int ParseCStringParams(int argc, char *argv[]);
+    char *sAtsIp;
+    char *sCommDev;
+    char *sOutDir;
+    in_addr_t AtsPort;
+    in_addr_t ServerPort;
+    in_addr_t InfoServerPort;
+    bool fDaemon;
+    bool fComm;
+    unsigned char ProtV;
+    bool f9600;
+    bool ftoff;
+      CParser();
+     ~CParser();
 };
 #endif
-

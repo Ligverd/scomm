@@ -1,3 +1,4 @@
+
 /***************************************************************************
  *   Copyright (C) 2007 by PAX   *
  *   pax@m-200.com   *
@@ -31,53 +32,92 @@
 
 #define LENSTRBUF 5000
 #define MAX_FRAME 1000
-#define MAXSIZEONEMESS 290
+#define MAXSIZEONEMESS 320
 
-extern pthread_mutex_t resourse;
-extern bool fFisWaitAccept;
-extern volatile bool link_state;
-extern bool fOk;
+class CPPP
+{
+  public:
 
-extern short txHead, txTail, txSend;
-extern short LastCode;
-extern short cTry;
-extern int read_bad_frames;
-extern unsigned short curInfo;
+    CPPP();
+    ~CPPP();
 
-extern unsigned short nFisCode;
+    void OpenChannel(unsigned char ch);
+    void CloseChannel(unsigned char ch);
+    void ReadBytesFtomATS(unsigned char chr);
+    void PutMessToBuff(unsigned char ch, unsigned char *data, short len);
+    void ProcessTimers(void);
+    void RunTimers(void);
+    bool isOk(void)
+    {
+        return fOk;
+    }
+    void PrintInfo(char *str);
 
-extern int tmA;
-extern int tmB;
-extern int tmC;
+    //stat
+    unsigned int m_dwReadBytes;
+    unsigned int m_dwWriteBytes;
+    unsigned int m_dwReadGoodFrames;
+    unsigned int m_dwReadBadFrames;
+    unsigned int m_dwDevReinits;
+    unsigned int m_dwCounterLinkDown;
 
-extern unsigned char buffer[LENSTRBUF * 10 + 100];
-extern int frameLen;
+  private:
 
-unsigned short read_word (short &pos);
-void write_word (short& pos, unsigned short w);
-void add (short& pos, short del );
-void copyto (unsigned char* data, unsigned short len);
-void copy_from (unsigned char* data, unsigned short len);
-void Write_bytes_to_ATS(unsigned char *data, short size);
-void write_frame (unsigned char *data, short len);
-void down_read_frame (unsigned char* data, short len);
-void Read_ATS_Packet (unsigned char chr);
-unsigned int controlsumm (unsigned char* data, int len);
-void RecvData (unsigned char* data, short len);
-void LinkUp(void);
-void Close_all_clients(void);
-void LinkDown(void);
-void OnOpenChannel(char ch);
-void OnCloseChannel(char ch);
-void WritePacket (unsigned char ch, unsigned char* data, short len);
-void SendData (unsigned char* data, short len);
-void ReadPacket(unsigned char ch, unsigned char *data, short len);
-void OpenChannel(unsigned char ch);
-void CloseChannel(unsigned char ch);
-void set_timer_a(int timer);
-void set_timer_b(int timer);
-void set_timer_c(int timer);
-void Timer_A(void);
-void Timer_B(void);
-void Timer_C(void);
+    // for work with txBuf
+    unsigned short read_word(short &pos);
+    void write_word(short &pos, unsigned short w);
+    void add(short &pos, short del);
+    void copyto(unsigned char *data, unsigned short len);
+    void copy_from(unsigned char *data, unsigned short len);
+
+    //protocol methods
+    void SendBytesToATS(unsigned char *data, short size);
+    void SendFrameToATS(unsigned char *data, short len);
+    void ProcessPacketFromATS(unsigned char *data, short len);
+    void LinkUp(void);
+    void LinkDown(void);
+    void OnOpenChannel(unsigned char ch);
+    void OnCloseChannel(unsigned char ch);
+    void ProcessMessFromATS(unsigned char *data, short len);
+    void SendMessToClient(unsigned char ch, unsigned char *data, short len);
+    void PutDataToBuff(unsigned char *data, short len);
+
+    void Timer_A(void);
+    void Timer_B(void);
+    void Timer_C(void);
+    void set_timer_a(int timer);
+    void set_timer_b(int timer);
+    void set_timer_c(int timer);
+
+// Timers:
+    int TimerA;
+    int TimerB;
+    int TimerC;
+
+    bool RunTimerA;
+    bool RunTimerB;
+    bool RunTimerC;
+
+    int tmA, tmB, tmC;
+
+//Logic
+    unsigned short nFisCode;
+    bool fFisWaitAccept;
+
+    bool fOk;
+    unsigned short curInfo;
+    short cTry, nWaitFE;
+
+// data:
+    unsigned char frameBuf[MAX_FRAME * 2 + 10];
+    int frameLen;
+
+    unsigned char txBuf[LENSTRBUF];
+    short txHead, txTail, txSend;
+
+    short LastCode, LastSize;
+
+    unsigned char buffer[LENSTRBUF + 10 + 100];
+};
+
 #endif

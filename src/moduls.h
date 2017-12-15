@@ -1,3 +1,4 @@
+
 /***************************************************************************
  *   Copyright (C) 2007 by PAX   *
  *   pax@m-200.com   *
@@ -19,22 +20,27 @@
  ***************************************************************************/
 #ifndef _MODULS_H
 #define _MODULS_H
-bool make_nonblock(int sock);
-int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port);
-int initTTY(char* comm);
-int Create_server_point(in_addr_t port);
-void init_Client(void);
-int IP_check(const char * ipstr);
-void Reinit_ATS_Connection(void);
-void Reinit_Server(void);
-int Open_log_file(char *file_name);
-void get_time_str(char* tm_str);
-bool StrToLog(const char* str);
-void Loger(const char* str);
-void get_parameters(void);
-int check_d(const char* str);
-int max(int x, int y);
-void Print_help(void);
-void Print_error(void);
-#endif
 
+bool make_nonblock(int sock);
+
+int Login_ethernet(const char *ATS_ip, in_addr_t ATS_port);
+
+int initTTY(char *comm);
+
+int Create_server_point(in_addr_t port, const char* name);
+
+void init_Client(void);
+
+void destroy_Client(void);
+
+void Reinit_ATS_Connection(void);
+
+bool StrToLog(const char *str);
+
+void Loger(const char *str);
+
+void TraceLoger(const char *str, const char *file, const int line);
+
+int MyWrite(int fd, void* buf, unsigned int len);
+
+#endif

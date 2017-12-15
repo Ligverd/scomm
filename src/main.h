@@ -1,3 +1,4 @@
+
 /***************************************************************************
  *   Copyright (C) 2007 by PAX   *
  *   pax@m-200.com   *
@@ -19,6 +20,7 @@
  ***************************************************************************/
 #ifndef _MAIN_H
 #define _MAIN_H
+
 //#define FREE_BSD 1
 
 #include <stdio.h>
@@ -32,10 +34,10 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <errno.h>
-#include <netinet/tcp.h>
 #include <time.h>
 #include <pthread.h>
 #include <termios.h>
+#include <netinet/tcp.h> 
 
 #ifdef FREE_BSD
 #include <sys/types.h>
@@ -47,30 +49,24 @@
 #define TCP_KEEPINTVL TCPCTL_KEEPINTVL
 #endif
 
-//#include <sys/types.h>
-//#include <netinet/in.h>
-//#include <sys/socket.h>
-
 #include "protocol.h"
 #include "moduls.h"
 #include "Client.h"
 #include "Parser.h"
 
 #define MAX_CLIENT 10
+#define TRACE(x) TraceLoger((x), __FILE__, __LINE__ )
 
 extern CParser parser;
+extern CPPP PPP;
 extern int ATS_fd;
-extern int Server_fd;
-extern int TimerA;
-extern int TimerB;
-extern int TimerC;
 extern CClient *Client[MAX_CLIENT];
+extern volatile bool link_state;
 
 extern int logfilefd;
-extern struct itimerval real_timer;
 extern struct sigaction sact;
+extern pthread_mutex_t client_mutex[MAX_CLIENT];
 
 void sig_SIGALRM_hndlr(int signo);
 
 #endif
-
