@@ -30,6 +30,7 @@ class CParser
     char *sAtsIp;
     char *sCommDev;
     char *sOutDir;
+    unsigned int nLogFileSize;
     in_addr_t AtsPort;
     in_addr_t ServerPort;
     in_addr_t InfoServerPort;

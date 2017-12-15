@@ -33,6 +33,7 @@ CParser::CParser()
     f9600 = false;
     ftoff = false;
     ProtV = 11;
+    nLogFileSize = 20;
 }
 
 CParser::~CParser()
@@ -180,6 +181,19 @@ int CParser::ParseCStringParams(int argc, char *argv[])
                       }
                   }
               }
+              else if (!strcmp(argv[i], "-logsize"))
+              {
+                  i++;
+                  if (i < argc)
+                  {
+                      if (CheckDec(argv[i]))
+                      {
+                          unsigned int sz = atoi(argv[i]);
+                          if(sz && sz <= 100)
+                            nLogFileSize = sz;
+                      }
+                  }
+              }
               else if (!strcmp(argv[i], "-infoport"))
               {
                   i++;
@@ -272,7 +286,7 @@ void CParser::PrintHelp(void)
     printf("\nNAME\n\
 \tscomm - Comunication protocol with ATS M-200\n\
 \nSYNOPSIS\n\
-\tscomm X.X.X.X|\"COMM\" N|dev P [-outdir dir] [-logfile path] [-protv X] [-d]\n\n\
+\tscomm X.X.X.X|\"COMM\" N|dev P [-outdir dir] [-logfile path] [-protv X] [-logsize Y] [-d]\n\n\
 If if using eithernet connection\n\
 \tX.X.X.X - ATS IP address. X = 0..255.\n\
 \tN - ATS TCP port. N = 0..65535.\n\
@@ -283,6 +297,7 @@ If if using COMM port\n\
 \tdir - log file directory. (default dir = ./)\n\
 \tpath - path for scomm logfile. (default path = dir/scomm.log)\n\
 \tX - protocol version. X = 0..11 (default X = 10)\n\
+\tY - logfile max size in megabytes. (default 20 MB)\n\
 \t-d - daemon mode.\n\
 \nEXAMPLES\n\
 \tUsing COMM port in daemon mode:\n\

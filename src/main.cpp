@@ -380,7 +380,7 @@ int main(int argc, char **argv)
 
     StrToLog("Starting scomm...\n");
     printf
-        ("\n<---------------------------------------scomm_v0.8.4.11----------------------------------------->\n");
+        ("\n<---------------------------------------scomm_v0.8.5.11----------------------------------------->\n");
 
     if (parser.fComm)
     {
@@ -393,6 +393,7 @@ int main(int argc, char **argv)
     }
     printf("Server port:%d\n", parser.ServerPort);
     printf("Log file:%s\n", parser.sOutDir);
+    printf("Log file size:%d KBytes\n", parser.nLogFileSize);
     if (parser.fDaemon)
         printf("Daemon mode\n");
     printf("Protocol version:%d\n", parser.ProtV);

@@ -311,10 +311,28 @@ bool StrToLog(const char *str)
         printf("Can't write to log file:%s\n", parser.sOutDir);
         return false;
     }
-    if (write(fd, str, strlen(str)) < 0)
-        fret = false;
+
+    if(write(fd, str, strlen(str)) < 0)
+    {
+        close(fd);
+        return false;
+    }
+
+    off_t flen = lseek(fd, 0, SEEK_CUR);
+
+    if(flen >= parser.nLogFileSize * 1024 * 1024)
+    {
+        std::string name1(parser.sOutDir);
+        std::string name2(parser.sOutDir);
+        name1 += ".1";
+        name2 += ".2";
+        remove(name2.c_str());
+        rename(name1.c_str(), name2.c_str());
+        rename(parser.sOutDir, name1.c_str());
+    }
+
     close(fd);
-    return fret;
+    return true;
 }
 
 void Loger(const char *str)
