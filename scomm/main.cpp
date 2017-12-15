@@ -364,7 +364,7 @@ int login_telnet()
 
                 int size  = read(fd, buff, 500);
                 if (size > 0) {
-                  printf("%s\n", buff);
+                  printf("%s\n", (char *)buff);
                   if (strstr((char *)buff, "login:"))
                   {
                       write(fd,telnet_login,strlen(telnet_login));

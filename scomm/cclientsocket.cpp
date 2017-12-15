@@ -65,11 +65,27 @@ void CClientSocket::SendPacket(unsigned char *buff, short size)
     }
 */
     unsigned char tmp_buff[1000];
+    char ip_message[50];
+    int delete_socket = 0;
     if (!fBinaryWrite) {
         memmove(tmp_buff, buff, size);
         memmove(tmp_buff + size, "\n\r", 2);
-        if (!strncmp((char *)buff, "BINARYMODE", 10) && size == 10)
-          fBinaryWrite = true;
+        //if (!strncmp((char *)buff, "BINARYMODE", 10) && size == 10)
+        //  fBinaryWrite = true;
+        if (!strncmp((char*)buff, "BINARYMODE-OK", 10 + 3) && size == 10 + 3)
+             fBinaryWrite = true;
+        if (!strncmp((char *)buff, "BINARYMODE-ER", 10 + 3) && size == 10 + 3)
+        {
+            fBinaryWrite = true;
+            delete_socket = -1;
+            client_socket[con] = NULL;
+            connect_point[TCP_CLIENT_POINT + con] = 0;
+            current_connect_point--;
+            sprintf(ip_message, "close IP = %s", IP_name[con]);
+            SaveToConnectLog(ip_message);
+            CloseChannel(con);
+    //        delete this;
+        }
     } else {
         memmove(tmp_buff, &size, sizeof(size));
         memmove(tmp_buff + sizeof(size), buff, size);
@@ -91,7 +107,8 @@ void CClientSocket::SendPacket(unsigned char *buff, short size)
              write(fd, tmp_buff, size + 2);
        }
     }
-
+    if (delete_socket == -1)
+        delete this;
 /*
     if (!fBinaryWrite)
      {
@@ -128,7 +145,7 @@ void CClientSocket::OnReceive( unsigned char *buff, short size )
             if (recvBuf[p] == 0xD)
             {
                 ReceivePacket(recvBuf + done, p - done);
-                if (!strncmp((char*)recvBuf + done, "BINARYMODE", 10) && p - done == 10)
+                if (!strncmp((char*)recvBuf + done, "BINARYMODE-", 10+1) && (p - done == 10+6+1))
                     fBinaryRead = true;
                 p ++;
                 if (recvBuf[p] == 0xA)

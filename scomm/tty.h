@@ -35,7 +35,7 @@
 
 
  // define for SCOMM
-#define SCOMVERSION 5
+#define SCOMVERSION 6
 #define XR ('X' * 256 + 'A')
 #define YR ('Y' * 256 + 'A')
 

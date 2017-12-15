@@ -21,15 +21,17 @@
 // define for connections
 #define MAX_CONNECT_POINT 10
 
+
 #define TTY_POINT 0
 #define TCP_SERVER_POINT 1
 #define TCP_CLIENT_POINT 2
 
 
+#include "tty.h"
 
 extern int connect_point[MAX_CONNECT_POINT];
 extern int current_connect_point;
-
+extern char IP_name[MAX_CON][20];
 // configuration variable
 extern  int do_daemon;   // stay deamon
 extern char *device_name;  // device name for TTY
@@ -53,5 +55,6 @@ void timer_b(void);
 void timer_c(void);
 
 void SaveToConnectLog(char *ip_message);
+void CloseChannel(char virLink);
 
 #endif

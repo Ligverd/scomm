@@ -34,7 +34,7 @@ project_type=normal_cpp
 sgml_file=/root/scomm/scomm/docs/en/index.sgml
 short_info=,,SMP
 sub_dir=scomm/
-version=0.2
+version=0.3
 version_control=None
 workspace=1
 [INSTALL]

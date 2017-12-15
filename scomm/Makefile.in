@@ -432,16 +432,6 @@ distdir: $(DISTFILES)
 	      || exit 1; \
 	  fi; \
 	done
-ccc.o: ccc.cpp ccc.h
-cclientsocket.o: cclientsocket.cpp cclientsocket.h tty.h logfile.h \
-	main.h
-cserversocket.o: cserversocket.cpp cserversocket.h
-logfile.o: logfile.cpp
-main.o: main.cpp tty.h logfile.h cclientsocket.h main.h cserversocket.h \
-	parse.h
-parse.o: parse.cpp parse.h main.h
-tty.o: tty.cpp tty.h logfile.h cclientsocket.h main.h
-
 info-am:
 info: info-recursive
 dvi-am:
