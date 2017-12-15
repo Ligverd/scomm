@@ -18,14 +18,15 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 #include "main.h"
+
 int ATS_fd;
 int Server_fd;
 CClient *Client[MAX_CLIENT];
 char ATS_IP[IP_STR_LEN];
 char comm_dev[MAX_IN_STR_LEN];
+char outdir[MAX_IN_STR_LEN];
 in_addr_t scomm_server_port;
 in_addr_t ATS_PORT;
-int COMMn;
 
 int TimerA;
 int TimerB;
@@ -38,7 +39,6 @@ bool daem_on;
 bool fcomm;
 bool Server_st;
 
-int logfilefd;
 struct itimerval real_timer;
 struct sigaction sact;
 
@@ -53,7 +53,6 @@ void sig_SIGTERM_hndlr(int signo)
 	if (Server_st) Server_st = false;
 	if(link_state) link_state = false;
 	close(ATS_fd);
-	close(logfilefd);
 	exit(signo);
 }
 
@@ -96,12 +95,12 @@ void *Client_ptread(void* arg)
 		FD_SET(Client[i]->Socket(), &fds);
 		if ((retval =  select(Client[i]->Socket() + 1, &fds, NULL, NULL, &tv)) > 0)
 		{
-			unsigned char buff[2048];
+				unsigned char buff[2048];
         		memset(buff, 0, 2048);
         		int size  = read(Client[i]->Socket(), buff, 2048);
         		if (size > 0) // if rcv data from client socket
         		{
-				Client[i]->OnReceive(buff, size);
+					Client[i]->OnReceive(buff, size);
         		}	
 			else if ((size == 0) || ((size == -1)&&(errno != EINTR))) break;
 		}
@@ -208,10 +207,9 @@ int main(int argc, char **argv)
 	daem_on = false;
 	fcomm = false;
 	init_Client();
-	memset(ATS_IP,0,IP_STR_LEN);
 	scomm_server_port = 0;
-	char outdir[MAX_IN_STR_LEN];
 	memset(outdir,0,MAX_IN_STR_LEN);
+
 	if (argc == 2 )
 	{
 		if(strcmp(argv[1],"-h") == 0)
@@ -231,21 +229,12 @@ int main(int argc, char **argv)
 			ext = true;
 		}
 		strcpy(ATS_IP,argv[1]);
+
 		if(fcomm)
 		{
-			if (check_d(argv[2]) < 0)
-			{
-				COMMn = -1;
-				strcpy(comm_dev,argv[2]);
-			}
-			else if ( (COMMn = atoi(argv[2])) > MAX_COMM_PORT_No )
-			{
-				printf("\r\nComm port number error!\r\n");
-				Print_help();
-				ext = true;
-			}
-			
+			strcpy(comm_dev,argv[2]);
 		}
+
 		else
 		{
 			ATS_PORT = atoi(argv[2]);
@@ -295,50 +284,29 @@ int main(int argc, char **argv)
 		get_parameters();
 	}	
 	
-	printf("\r\n");
-	printf("<---------------------------------------Scomm_v0.4.10------------------------------------------->\r\n");
 
-	if ((logfilefd = Open_log_file(strcat(outdir,"Scommlog")))<=0) printf("Can't create logfile!\r\n");
-
+	//if ((logfilefd = Open_log_file(strcat(outdir,"Scommlog")))<=0) printf("Can't create logfile!\r\n");
+	strcat(outdir,"Scommlog");
+	StrToLog("Starting scomm...\r\n");
+	printf("\r\n<---------------------------------------scomm_v0.7.1.10------------------------------------------->\r\n");
 	if (fcomm)
 	{
-		if(COMMn>=0)
-		{
-			if ((ATS_fd = initTTY(COMMn)) <0)
-			{
-				close(logfilefd);
-				exit(1);
-			}
-		}
-		else
-		{
-			if ((ATS_fd = initTTY(comm_dev)) <0)
-			{
-				close(logfilefd);
-				exit(1);
-			}
-		}
+		if ((ATS_fd = initTTY(comm_dev)) <0)
+			exit(1);
 	}
 	else
 	{
 		if( (ATS_fd = Login_ethernet(ATS_IP,ATS_PORT)) <0) 
-		{
-			close(logfilefd);
 			exit(1);
-		}
 	}
 
 	if( (Server_fd = Create_server_point(scomm_server_port)) <0) 
 	{
 		close(ATS_fd);
-		close(logfilefd);
 		exit(1);
 	}
-
-	printf("\r\n");
 	Loger("Init is ok!");
 	printf("<----------------------------------------------------------------------------------------------->\r\n");
-	printf("\r\n");
 	
 	if(daem_on) {Loger("Daemon mode on!");daemon(0,0);}
 
@@ -347,7 +315,6 @@ int main(int argc, char **argv)
 		Loger("Can' create server tread!");
 		close(Server_fd);
 		close(ATS_fd);
-		close(logfilefd);
 		exit(1);
 	}
 

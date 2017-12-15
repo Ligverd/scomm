@@ -41,6 +41,7 @@ bool fOk;
 bool fFisWaitAccept;
 bool fMustReinitPort;
 bool link_state;
+bool setcom9600 = false;
 
 unsigned short read_word ( short &pos )
 {
@@ -350,7 +351,9 @@ void LinkUp( void )
 void LinkDown(void)
 {
 	Loger("LinkDown!");
-	link_state = false;//dlia otboja klientov ozhidajushih soedinenija	
+	link_state = false;//dlia otboja klientov ozhidajushih soedinenija
+	if(setcom9600)
+		Reinit_ATS_Connection();
 }
 
 void OnOpenChannel(unsigned char ch)
@@ -427,16 +430,19 @@ void RecvData (unsigned char* data, short len)
 	{
 		if (fcomm)
 		{
-			int n;
 			struct termios tty;
-			if ((n=tcgetattr(ATS_fd, &tty)) <0) Loger("Can't get COMM info to set 9600!");
+			if (tcgetattr(ATS_fd, &tty) < 0) Loger("Can't get COMM info to set 9600!");
 			else
 			{
 				cfsetospeed(&tty, B9600);
 				cfsetispeed(&tty, B9600);
 				cfmakeraw(&tty);
-				if ((n = tcsetattr(ATS_fd, TCSANOW, &tty)) <0) Loger("Can't set COMM 9600!");
-				else Loger("COMM set to 9600!");
+				if (tcsetattr(ATS_fd, TCSANOW, &tty) < 0) Loger("Can't set COMM 9600!");
+				else
+				{ 
+					setcom9600 = true;
+					Loger("COMM set to 9600!");
+				}
 			}
 		}
 		else Loger("Can't set COMM 9600 - scomm conected to ATS via ethernet!!!");

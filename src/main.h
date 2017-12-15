@@ -59,7 +59,6 @@
 #define MIN_ATS_PORT 1025
 #define MIN_SCOMM_SERVER_PORT 10001
 #define MAX_PORT 65535
-#define MAX_COMM_PORT_No 20
 #define MAX_IN_STR_LEN 128
 #define MAX_REINIT_TRY 300
 
@@ -78,8 +77,8 @@ extern struct sigaction sact;
 extern bool daem_on;
 extern bool fcomm;
 extern bool Server_st;
-extern int COMMn;
 extern char comm_dev[MAX_IN_STR_LEN];
+extern char outdir[MAX_IN_STR_LEN];
 void sig_SIGALRM_hndlr(int signo);
 void sig_SIGTERM_hndlr(int signo);
 

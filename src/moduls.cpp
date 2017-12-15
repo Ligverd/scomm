@@ -19,45 +19,21 @@
  ***************************************************************************/
 
 #include "main.h"
-pthread_mutex_t file = PTHREAD_MUTEX_INITIALIZER;
 
-size_t ReadNonBlock(int fd, char* buff, size_t len,unsigned int del)
-{
-	int n;
-	size_t l,ans_len=0;
-	fd_set rset;
-	struct timeval tout;
-	while(len>0)
-	{
-		l = read(fd,buff+ans_len,len);
-		if(l == -1)
-		{
-			if(errno != EWOULDBLOCK) return ans_len;
-			tout.tv_sec = 0;
-			tout.tv_usec = del*1000;
-			FD_ZERO(&rset);
-			FD_SET(fd,&rset);
-			if((n = select(fd+1, &rset,  NULL, NULL, &tout))<1) return ans_len;
-		}
-		else {ans_len+=l;len-=l;}
-	}
-	return ans_len;
-}
-
-int make_nonblock(int sock)
+bool make_nonblock(int sock)
 {
 	int sock_opt;
 	if((sock_opt = fcntl(sock, F_GETFL, O_NONBLOCK)) <0) 
 	{
 		close(sock); 
-		return -1;
+		return false;
 	}
 	if((sock_opt = fcntl(sock, F_SETFL, sock_opt | O_NONBLOCK)) <0)
 	{	
 		close(sock); 
-		return -1;
+		return false;
 	}
-	return 0;
+	return true;
 }
 
 int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port)
@@ -71,7 +47,7 @@ int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port)
 		return -1;
 	}
 	
-	if(make_nonblock(fd) <0) 
+	if(!make_nonblock(fd)) 
 	{
 		close(fd); 
 		Loger("Can't make ATS socket nonblock!");
@@ -101,8 +77,8 @@ int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port)
 	FD_SET(fd,&wset);
 	rset = wset;
 	int n;
-    	if (connect(fd, (struct sockaddr *) &ATS_addr, sizeof(ATS_addr))<0)
-    	{
+    if (connect(fd, (struct sockaddr *) &ATS_addr, sizeof(ATS_addr))<0)
+    {
 		if (errno != EINPROGRESS)
 		{ 
 			close(fd);
@@ -110,13 +86,13 @@ int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port)
 			return -1;
 		} 
 		state = 1;
-        	printf("Connection to ATS in process...\r\n");
+		printf("Connection to ATS in process...\r\n");
 	} 
-	else state = 0;
-	if (state == 1) 
+
+	if (state) 
 	{	
 		n = select(fd+1, &rset, &wset, NULL, &tout);
-		if((n<0) || ((n==1) && (FD_ISSET(fd, &wset)&&FD_ISSET(fd, &rset))) )
+		if( n<0 || (FD_ISSET(fd, &wset)&&FD_ISSET(fd, &rset)) )
 		{
 			close(fd);
 			Loger("Connection to ATS Error!");
@@ -128,64 +104,16 @@ int Login_ethernet(const char* ATS_ip, in_addr_t ATS_port)
 			Loger("Time out of connection to ATS!");
 			return -1;
 		}
-	}	
-	tout.tv_sec = 10;
-	tout.tv_usec = 0;
-	FD_ZERO(&rset);
-	FD_SET(fd,&rset);
-	if ((n = select(fd+1, &rset, NULL, NULL, &tout))<1)
-	{
-		close(fd);
-		Loger("Can't get connection info!");
-		return -1;
 	}
-	memset ((char*)&buff,0,LOG_STR_SIZE);//clear
-	if ((n = ReadNonBlock(fd,buff,LOG_STR_SIZE,10))<1)
-	{
-		close(fd);
-		Loger("Can't get connection info!");
-		return -1;
-	}
-	for (n = 0;n<strlen(buff);n++) if (buff[n]=='\r')buff[n]=' ';
 	char log[LOG_STR_SIZE];
-	memset (log,0,LOG_STR_SIZE);
-	sprintf(log,"Successfuly connected to ATS! ATS IP:%s\r\nConnection info: %s\r\n",ATS_ip,buff);
+	sprintf(log,"Successfuly connected! ATS IP:%s",ATS_ip);
 	Loger(log);
 	return fd;
-}
-
-int initTTY(unsigned char comm)
-{
-	char tty_name [20];
-	memset(tty_name,0,20);
-	sprintf(tty_name,"/dev/ttyS%d",comm);
-	int portfd = -1;
-	portfd = open(tty_name, O_RDWR | O_NOCTTY | O_NDELAY);
-	memset(tty_name,0,20);
-	if (portfd > 0)
-	{
-		fcntl(portfd, F_SETFL, FNDELAY);
-		struct termios tty;
-		tcgetattr(portfd, &tty);
-		cfsetospeed(&tty, B38400);
-		cfsetispeed(&tty, B38400);
-		cfmakeraw(&tty);
-		tcsetattr(portfd, TCSANOW, &tty);
-		sprintf(tty_name,"COMM%d opened!\r\n",comm);
-		Loger(tty_name);
-	}
-	else
-	{ 
-		sprintf(tty_name,"Can't open COMM%d!\r\n",comm);
-		Loger(tty_name);
-	}
-	return portfd;
 }
 
 int initTTY(char* comm)
 {
 	char str [strlen(comm_dev)+sizeof("Can't open !\r\n")+1];
-	memset(str,0,strlen(comm_dev)+sizeof("Can't open !\r\n")+1);
 	int portfd = -1;
 	portfd = open(comm, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (portfd > 0)
@@ -195,14 +123,16 @@ int initTTY(char* comm)
 		tcgetattr(portfd, &tty);
 		cfsetospeed(&tty, B38400);
 		cfsetispeed(&tty, B38400);
+		//cfsetospeed(&tty, B9600);
+		//cfsetispeed(&tty, B9600);
 		cfmakeraw(&tty);
 		tcsetattr(portfd, TCSANOW, &tty);
-		sprintf(str,"%s opened!\r\n",comm);
+		sprintf(str,"device:%s opened!",comm);
 		Loger(str);
 	}
 	else
 	{ 
-		sprintf(str,"Can't open %s!\r\n",comm);
+		sprintf(str,"Can't open device:%s",comm);
 		Loger(str);
 	}
 	return portfd;
@@ -219,7 +149,7 @@ int Create_server_point(in_addr_t port)
 		return -1;
 	}
 	
-	if(make_nonblock(fd) <0) 
+	if(!make_nonblock(fd)) 
 	{
 		close(fd); 
 		Loger("Can't make scomm server socket nonblock!");
@@ -255,24 +185,22 @@ int Create_server_point(in_addr_t port)
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	if ( bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <0)
-    	{
-        	close(fd);
+	{
+		close(fd);
 		char log[LOG_STR_SIZE];
-		memset (log,0,LOG_STR_SIZE);
 		sprintf(log,"Error binding Scomm server with port:%d\r\n",port);
 		Loger(log);
 		return -1;
-    	}
+    }
 
-    	if (listen(fd,MAX_CLIENT) < 0)
-    	{
+	if (listen(fd,MAX_CLIENT) < 0)
+    {
 		close(fd);
 		Loger("Listen Scomm server socket error!");
 		return -1;
-    	}
+    }
 	char log[LOG_STR_SIZE];
-	memset (log,0,LOG_STR_SIZE);
-	sprintf(log,"Scomm server listening port: %d\r\n",ntohs(server_addr.sin_port));
+	sprintf(log,"Scomm server listening port: %d",ntohs(server_addr.sin_port));
 	Loger(log);
 	return fd;
 }
@@ -292,23 +220,11 @@ void Reinit_ATS_Connection(void)
 	sigaction(SIGALRM, &sact, NULL);
 	if (fcomm)
 	{
-		if (COMMn>=0)
+		while ((ATS_fd = initTTY(comm_dev)) <0) 
 		{
-			while ((ATS_fd = initTTY(COMMn)) <0) 
-			{
-				sleep(1);
-				i++;
-				if (i == MAX_REINIT_TRY) sig_SIGTERM_hndlr(1);
-			}
-		}
-		else 
-		{
-			while ((ATS_fd = initTTY(comm_dev)) <0) 
-			{
-				sleep(1);
-				i++;
-				if (i == MAX_REINIT_TRY) sig_SIGTERM_hndlr(1);
-			}
+			sleep(1);
+			i++;
+			if (i == MAX_REINIT_TRY) sig_SIGTERM_hndlr(1);
 		}
 	}
 	else
@@ -342,12 +258,6 @@ void Reinit_Server(void)
 	}
 }
 
-int Open_log_file(char *file_name)
-{
-	int fdlogfile = open(file_name, O_RDWR | O_CREAT| O_TRUNC, 0666);
-	return  fdlogfile;
-}
-
 void get_time_str(char* tm_str)
 {
 	time_t itime;
@@ -357,32 +267,39 @@ void get_time_str(char* tm_str)
 	sprintf(tm_str,"%02d.%02d.%04d %02d:%02d:%02d",T.tm_mday,T.tm_mon,(T.tm_year+1900),T.tm_hour,T.tm_min,T.tm_sec);
 }
 
+bool StrToLog(const char* str)
+{
+	int fd;
+	bool fret = true;
+	if ( (fd = open(outdir, O_RDWR | O_CREAT | O_APPEND , 0666 )) < 0)
+	{
+		printf("Scomm: Can't write to log file:%s\n",outdir);
+		return false;
+	}
+	if(write(fd, str, strlen(str))<0)
+		fret = false;
+	close(fd);
+	return fret;
+}
+
 void Loger(const char* str)
 {
 	char time_str[20];
 	char logstr[LOG_STR_SIZE];
-	memset (time_str,0,20);
-	memset (logstr,0,LOG_STR_SIZE);
 	get_time_str(time_str);
 	sprintf(logstr,"<%s> %s\r\n",time_str,str);
 	printf("%s",logstr);
-	pthread_mutex_lock(&file);
-	write(logfilefd,logstr,strlen(logstr));
-	pthread_mutex_unlock(&file);
+	StrToLog(logstr);
 }
 
 void Loger(const char* str1,const char* str2,int d)
 {
 	char time_str[20];
 	char logstr[LOG_STR_SIZE];
-	memset (time_str,0,20);
-	memset (logstr,0,LOG_STR_SIZE);
 	get_time_str(time_str);
 	sprintf(logstr,"<%s> Client%d %s%s\r\n",time_str,d,str1,str2);
 	printf("%s",logstr);
-	pthread_mutex_lock(&file);
-	write(logfilefd,logstr,strlen(logstr));
-	pthread_mutex_unlock(&file);
+	StrToLog(logstr);
 }
 
 int check_d(const char* str)
@@ -391,6 +308,7 @@ int check_d(const char* str)
 	for (i = 0;i<strlen(str);i++) if (str[i]>'9'||str[i]<'0')return -1;
 	return 0;
 }
+
 void get_parameters(void)
 {
 		char in_str[MAX_IN_STR_LEN];
@@ -410,18 +328,9 @@ void get_parameters(void)
 		{
 			if (fcomm)
 			{
-				printf("Enter comm port number or device file name:");
+				printf("Enter comm port device file name:");
 				scanf("%s",in_str);
-				if (check_d(in_str) < 0)
-				{
-					COMMn = -1;
-					strcpy(comm_dev,in_str);
-				}
-				else if ((COMMn = atoi(in_str)) > MAX_COMM_PORT_No)
-				{
-					printf("\r\nComm port number error! ...(2.2)\r\n");
-					Print_error();
-				}
+				strcpy(comm_dev,in_str);
 			}
 			else
 			{
@@ -434,7 +343,7 @@ void get_parameters(void)
 					Print_error();
 				}
 			}
-		} while ( (ATS_PORT < MIN_ATS_PORT || ATS_PORT>MAX_PORT)&&!fcomm || COMMn>MAX_COMM_PORT_No&&fcomm );
+		} while ( (ATS_PORT < MIN_ATS_PORT || ATS_PORT>MAX_PORT) && !fcomm );
 		
 		do
 		{
@@ -470,11 +379,14 @@ void get_parameters(void)
 
 int IP_check(const char * ipstr)
 {
-	if (strcmp(ipstr,"COMM") == 0)
+	if (!strcmp(ipstr,"COMM"))
 	{
 		fcomm = true;
 		return 1;
 	}
+	if (!strcmp(ipstr,"localhost"))
+		return 1;
+
 	int len = strlen(ipstr);
 	if (len>6 && len<IP_STR_LEN)
 	{
@@ -505,33 +417,31 @@ int IP_check(const char * ipstr)
 }
 void Print_help(void)
 {
-	printf("\r\nNAME\r\n");
-	printf("\tscomm - software realization of comunication protocol with ATS M-200\r\n");
-	printf("\r\nSYNOPSIS\r\n");
-	printf("\tscomm X.X.X.X|\"COMM\" N|n|dev P [-d]\r\n\r\n");
-	printf("\tX.X.X.X - ATS IP address if using eithernet connection with ATS. X = 0..255.\r\n");
-	printf("\t\"COMM\" - if using commport connection with ATS\r\n");
-	printf("\tN - ATS TCP port, if using eithernet connection with ATS. N = 1025..65535.\r\n");
-	printf("\tn - commport number, if using commport connection with ATS. n = 0..10\r\n");
-	printf("\tdev - device file name, if using commport connection with ATS. dev = /dev/ttyn\r\n");
-	printf("\tP - scomm server TCP port. P = 10000..65535; P != N.\r\n");
-	printf("\t-d - daemon mode.\r\n");
-	printf("\r\nEXAMPLES\r\n");
-	printf("\tUsing commport in daemon mode:[MTA@Pavel /home]./scomm COMM /dev/tty0 20000 -d\r\n");
-	printf("\tUsing ethernet:[MTA@Pavel /home]./scomm 192.168.5.46 10000 20000\r\n\r\n");
+	printf("\r\nNAME\r\n\
+	\tscomm - software realization of comunication protocol with ATS M-200\r\n\
+	\r\nSYNOPSIS\r\n\
+	\tscomm X.X.X.X|\"COMM\" N|dev P [-d]\r\n\r\n\
+	\tX.X.X.X - ATS IP address if using eithernet connection with ATS. X = 0..255.\r\n\
+	\t\"COMM\" - if using commport connection with ATS\r\n\
+	\tN - ATS TCP port, if using eithernet connection with ATS. N = 1025..65535.\r\n\
+	\tdev - device file name, if using commport connection with ATS. dev = /dev/ttySx\r\n\
+	\tP - scomm server TCP port. P = 10000..65535; P != N.\r\n\
+	\t-d - daemon mode.\r\n\
+	\r\nEXAMPLES\r\n\
+	\tUsing commport in daemon mode:[MTA@Pavel /home]./scomm COMM /dev/tty0 20000 -d\r\n\
+	\tUsing ethernet:[MTA@Pavel /home]./scomm 192.168.5.46 10000 20000\r\n\r\n");
 }
 void Print_error(void)
 {
-	printf("\r\n\t1.1. ATS IP address:X.X.X.X, X = 0..255.\r\n");
-	printf("\t1.2. \"COMM\" - if using commport connection with ATS.\r\n");
-	printf("\t2.1. ATS TCP port:1025..65535, if using eithernet connection with ATS.\r\n");
-	printf("\t2.2. Commport number:0..20, if using commport connection with ATS.\r\n");
-	printf("\t2.2. Device file name:/dev/tty0..20, if using commport connection with ATS.\r\n");
-	printf("\t3.1. Scomm server TCP port:10001..65535, scomm server TCP port != ATS TCP port.\r\n");
-	printf("\t4.1. Daemon mode (y/n)?.\r\n");
-	printf("\r\nEXAMPLE\r\n");
-	printf("\tEnter ATS IP address or \"COMM\":COMM\r\n");
-	printf("\tEnter comm port number or device file name:/dev/tty0\r\n");
-	printf("\tEnter scomm server port:20000\r\n");
-	printf("\tDaemon mode (y/n)?:n\r\n\r\n");
+	printf("\r\n\t1.1. ATS IP address:X.X.X.X, X = 0..255.\r\n\
+	\t1.2. \"COMM\" - if using commport connection with ATS.\r\n\
+	\t2.1. ATS TCP port:1025..65535, if using eithernet connection with ATS.\r\n\
+	\t2.2. Device file name:/dev/tty0..20, if using commport connection with ATS.\r\n\
+	\t3.1. Scomm server TCP port:10001..65535, scomm server TCP port != ATS TCP port.\r\n\
+	\t4.1. Daemon mode (y/n)?.\r\n\
+	\r\nEXAMPLE\r\n\
+	\tEnter ATS IP address or \"COMM\":COMM\r\n\
+	\tEnter comm port number or device file name:/dev/tty0\r\n\
+	\tEnter scomm server port:20000\r\n\
+	\tDaemon mode (y/n)?:n\r\n\r\n");
 }
