@@ -38,7 +38,8 @@
 #include <time.h>
 #include <pthread.h>
 #include <termios.h>
-#include <netinet/tcp.h> 
+#include <netinet/tcp.h>
+#include <stdint.h>
 
 #ifdef FREE_BSD
 #include <sys/types.h>
